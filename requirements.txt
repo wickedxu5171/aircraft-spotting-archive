@@ -1,0 +1,7 @@
+Flask==3.1.2
+Flask-SQLAlchemy==3.1.1
+PyMySQL==1.1.2
+openpyxl==3.1.5
+python-dotenv==1.1.1
+pytest==8.4.1
+trino[external-authentication-token-cache]==0.339.0

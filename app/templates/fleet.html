@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}British Airways A380 Fleet{% endblock %}
+{% block content %}
+<section class="hero fleet-hero">
+  <p class="eyebrow">Fleet case study · British Airways</p>
+  <h1>Airbus A380-841</h1>
+  <p>{{ spotted_count }} of {{ fleet|length }} aircraft spotted. Bright tiles are aircraft already photographed.</p>
+</section>
+
+<div class="fleet-grid">
+  {% for aircraft in fleet %}
+  <article class="fleet-tile {% if aircraft.spotted %}is-spotted{% endif %}">
+    <span class="fleet-state">{{ 'Spotted' if aircraft.spotted else 'Not spotted' }}</span>
+    <h2>{{ aircraft.registration }}</h2>
+    <p>{{ aircraft.event_count }} spotting event{{ '' if aircraft.event_count == 1 else 's' }}</p>
+  </article>
+  {% endfor %}
+</div>
+{% endblock %}
+

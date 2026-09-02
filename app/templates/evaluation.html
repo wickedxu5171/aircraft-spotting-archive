@@ -1,0 +1,365 @@
+{% extends "base.html" %}
+{% block title %}Matching Evaluation · Aircraft Spotting Archive{% endblock %}
+{% block content %}
+<div class="save-toast" id="save-toast" role="status" aria-live="polite" hidden></div>
+<section class="hero evaluation-hero">
+  <p class="eyebrow">Explainable record linkage</p>
+  <h1>Matching evaluation</h1>
+  <p>Review ADS-B candidates, compare collection dates, record an independent ground truth, and measure linkage performance.</p>
+</section>
+
+<section class="ambiguity-note" aria-labelledby="ambiguity-note-title">
+  <p class="eyebrow">Why human review remains necessary</p>
+  <h2 id="ambiguity-note-title">One registration can return several plausible ADS-B legs</h2>
+  <p><strong>Operational-frequency ambiguity:</strong> high-frequency narrow-body aircraft may operate several sectors on the same calendar day. If an observation has only a date, registration agreement can return multiple legitimate ADS-B legs for the same airframe. G-EUPJ and G-NEOU are examples in this archive.</p>
+  <p><strong>Registration-only candidate ambiguity:</strong> the problem is not limited to narrow-body schedules. G-VPRD produced three same-airframe candidates with different callsigns: #555/VIR92MC, #556/VIR103M and #557/VIR104L. All received the same 40 registration points. After the photo date was corrected to 2025-11-05, its 12:08 capture time became valid independent evidence: #556 received 25 time points and 82.5 overall, while #555 received 4 time points and 59 overall and #557 received no time points and 40 overall. The human-reviewed photo metadata therefore resolves the competing candidates rather than registration agreement alone deciding the link.</p>
+  <p>ADS-B enrichment therefore adds useful callsign, route, time and trajectory evidence while also exposing competing candidates. A ranked result is an explainable hypothesis, not a fact; the final link remains a human decision when decisive independent evidence is missing.</p>
+</section>
+
+<details class="review-guide" open>
+  <summary>How to complete an independent manual review</summary>
+  <ol>
+    <li><strong>Choose a representative subset.</strong> The current snapshot contains 25 independently reviewed records from 2025-11-05. Add the four 2026-05-16 records only if cross-date conclusions are required, and keep genuinely unresolved cases unevaluated.</li>
+    <li><strong>Find evidence independent of this matcher.</strong> Prefer the photograph's EXIF capture time, original spotting notes, or a separate historical flight playback/source. Do not treat the top score itself as proof.</li>
+    <li><strong>Compare each candidate.</strong> Check registration, capture-time window, Heathrow proximity, route endpoints and operational callsign. Open the candidate flight page to inspect its trajectory.</li>
+    <li><strong>Save only a defensible conclusion.</strong> Select the verified candidate, or explicitly select “Verified: no candidate matches”. If evidence is insufficient, leave the record unverified and do not submit the form.</li>
+  </ol>
+  <p>In Notes, record the evidence source and decisive facts, for example: “Photo EXIF 14:32 UTC; candidate #123 passed LHR at 14:29; route and registration agree.”</p>
+</details>
+
+<section class="score-guide" aria-labelledby="score-guide-title">
+  <div>
+    <p class="eyebrow">How the score works</p>
+    <h2 id="score-guide-title">Candidate scores are weighted evidence, not percentages</h2>
+    <p>Each candidate is an ADS-B flight leg that could correspond to the spotting event. The total is the sum of five evidence components. A higher score means a stronger automated hypothesis, but it is not proof of a correct match.</p>
+  </div>
+  <dl class="score-weights">
+    <div><dt>Registration</dt><dd>up to 40 points</dd></div>
+    <div><dt>Time</dt><dd>up to 25 points</dd></div>
+    <div><dt>Airport</dt><dd>up to 15 points</dd></div>
+    <div><dt>Callsign</dt><dd>up to 15 points</dd></div>
+    <div><dt>Route</dt><dd>up to 5 points</dd></div>
+  </dl>
+  <p class="score-thresholds"><strong>Automated classification:</strong> 80–100 = Matched; 60–79 = Review; below 60 = Unmatched. The sample-event count refers to the records in the selected scope, not to disputed matches.</p>
+</section>
+
+{% if comparison %}
+<section class="comparison-panel">
+  <div class="chart-heading">
+    <div>
+      <p class="eyebrow">Dataset comparison</p>
+      <h2>Historical ADS-B linkage by spotting date</h2>
+    </div>
+    <span>Candidate coverage is not the same as a verified correct match.</span>
+  </div>
+  <div class="comparison-table-wrap">
+    <table class="comparison-table">
+      <thead>
+        <tr><th>Date</th><th>Records</th><th>Aircraft</th><th>ICAO24</th><th>With candidates</th><th>Coverage</th><th>Matched</th><th>Review</th><th>No candidate</th><th>Avg. top score</th></tr>
+      </thead>
+      <tbody>
+        {% for item in comparison %}
+        <tr>
+          <td><a class="table-link" href="{{ url_for('main.evaluation', date=item.date.isoformat(), location=selected_location or 'London Heathrow') }}">{{ item.date.isoformat() }}</a></td>
+          <td>{{ item.events }}</td>
+          <td>{{ item.unique_aircraft }}</td>
+          <td>{{ item.metadata_mapped }}/{{ item.unique_aircraft }}</td>
+          <td>{{ item.with_candidates }}</td>
+          <td><strong>{{ '%.1f%%'|format(item.candidate_rate * 100) if item.candidate_rate is not none else '—' }}</strong></td>
+          <td>{{ item.matched }}</td>
+          <td>{{ item.review }}</td>
+          <td>{{ item.without_candidates }}</td>
+          <td>{{ '%.1f'|format(item.average_top_score) if item.average_top_score is not none else '—' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endif %}
+
+<form class="evaluation-filters" method="get">
+  <input type="hidden" name="review_status" value="{{ review_status }}">
+  <label>
+    Spotting date
+    <input type="date" name="date" value="{{ selected_date }}">
+  </label>
+  <label>
+    Original location value
+    <input name="location" value="{{ selected_location }}">
+  </label>
+  <button type="submit">Load sample</button>
+</form>
+
+<section class="metric-grid" aria-label="Evaluation metrics">
+  <article class="metric-card"><span>Sample events</span><strong>{{ metrics.events }}</strong></article>
+  <article class="metric-card"><span>With candidates</span><strong>{{ metrics.events_with_candidates }}</strong></article>
+  <article class="metric-card"><span>Ground truth</span><strong id="metric-ground-truth">{{ metrics.verified }}</strong></article>
+  <article class="metric-card"><span>Enrichment</span><strong>{{ '%.1f%%'|format(metrics.enrichment_rate * 100) if metrics.enrichment_rate is not none else '—' }}</strong></article>
+  <article class="metric-card"><span>Precision</span><strong>{{ '%.3f'|format(metrics.precision) if metrics.precision is not none else '—' }}</strong></article>
+  <article class="metric-card"><span>Recall</span><strong>{{ '%.3f'|format(metrics.recall) if metrics.recall is not none else '—' }}</strong></article>
+  <article class="metric-card metric-primary"><span>F1 score</span><strong>{{ '%.3f'|format(metrics.f1) if metrics.f1 is not none else '—' }}</strong></article>
+</section>
+
+{% if ablation and ablation[0].verified %}
+<section class="comparison-panel" aria-labelledby="ablation-title">
+  <div class="chart-heading">
+    <div>
+      <p class="eyebrow">Missing-data experiment</p>
+      <h2 id="ablation-title">Ground-truth ablation</h2>
+    </div>
+    <span>Current n=25 is a single-date positive-only subset; ranking and threshold results should not be generalised as overall accuracy.</span>
+  </div>
+  <p>Each variant removes one evidence component, rescales the remaining score to 100, re-ranks candidates, and applies the same 80-point matched threshold.</p>
+  <div class="comparison-table-wrap">
+    <table class="comparison-table">
+      <thead>
+        <tr><th>Variant</th><th>Verified n</th><th>Correct top</th><th>Avg. top score</th><th>Precision</th><th>Recall</th><th>F1</th></tr>
+      </thead>
+      <tbody>
+        {% for item in ablation %}
+        <tr>
+          <td><strong>{{ item.label }}</strong></td>
+          <td>{{ item.verified }}</td>
+          <td>{{ item.correct_top }}/{{ item.verified }}</td>
+          <td>{{ '%.1f'|format(item.average_top_score) if item.average_top_score is not none else '—' }}</td>
+          <td>{{ '%.3f'|format(item.precision) if item.precision is not none else '—' }}</td>
+          <td>{{ '%.3f'|format(item.recall) if item.recall is not none else '—' }}</td>
+          <td>{{ '%.3f'|format(item.f1) if item.f1 is not none else '—' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endif %}
+
+<section class="results-heading">
+  <div>
+    <p class="eyebrow">Controlled sample</p>
+    <h2><span id="visible-count">{{ rows|length }}</span> of {{ metrics.events }} spotting events</h2>
+  </div>
+  <div class="results-actions">
+    <nav class="review-tabs" aria-label="Review status">
+      {% for value, label in [('all', 'All'), ('evaluated', 'Evaluated'), ('unevaluated', 'Unevaluated')] %}
+      <a class="review-tab{% if review_status == value %} is-active{% endif %}"
+         href="{{ url_for('main.evaluation', date=selected_date, location=selected_location, review_status=value) }}"
+         {% if review_status == value %}aria-current="page"{% endif %}>
+        {{ label }} <span id="count-{{ value }}">{{ review_counts[value] }}</span>
+      </a>
+      {% endfor %}
+    </nav>
+    <div class="export-actions" aria-label="Export evaluation data">
+      <a href="{{ url_for('main.export_evaluation', export_format='csv', date=selected_date, location=selected_location) }}">Export CSV</a>
+      <a href="{{ url_for('main.export_evaluation', export_format='json', date=selected_date, location=selected_location) }}">Export JSON</a>
+    </div>
+  </div>
+</section>
+
+<div class="evaluation-list">
+  {% for row in rows %}
+  {% set automated_state = row.top.match_status if row.top else 'missing' %}
+  <article id="event-{{ row.event.spotting_id }}"
+           class="evaluation-row review-state-{{ 'evaluated' if row.truth else 'unevaluated' }} match-state-{{ automated_state }}"
+           data-review-state="{{ 'evaluated' if row.truth else 'unevaluated' }}"
+           data-spotting-id="{{ row.event.spotting_id }}">
+    <div class="event-summary">
+      <div>
+        {% if row.truth and row.truth.expected_adsb_flight_id is not none %}
+          <span class="status status-verified" data-review-badge>Verified match</span>
+        {% elif row.truth %}
+          <span class="status status-verified-none" data-review-badge>Verified: no match</span>
+        {% elif not row.top %}
+          <span class="status status-missing" data-review-badge>Unevaluated · missing ADS-B</span>
+        {% elif row.top.match_status == 'matched' %}
+          <span class="status status-likely" data-review-badge>Unevaluated · likely match</span>
+        {% elif row.top.match_status == 'review' %}
+          <span class="status status-review" data-review-badge>Unevaluated · needs review</span>
+        {% else %}
+          <span class="status status-unmatched" data-review-badge>Unevaluated · low confidence</span>
+        {% endif %}
+        <h3>{{ row.event.aircraft.registration }}</h3>
+        <p>{{ row.event.flight_number or 'No flight number' }} · {{ row.event.route_text_original or 'No route' }}</p>
+        {% if row.photo and row.photo.captured_at %}
+          {% if row.photo_date_matches %}
+            <p class="photo-time-evidence">Photo time {{ row.photo.captured_at.strftime('%Y-%m-%d %H:%M') }} · used as matching evidence</p>
+          {% else %}
+            <p class="photo-time-warning">Photo time {{ row.photo.captured_at.strftime('%Y-%m-%d %H:%M') }} differs from the observation date · ignored by matcher</p>
+          {% endif %}
+        {% endif %}
+      </div>
+      <div class="candidate-summary">
+        {% if row.top %}
+          <span class="status status-{{ row.top.match_status }}">{{ row.top.match_status }}</span>
+          <strong>{{ '%.0f'|format(row.top.total_score) }}/100</strong>
+          <small>{{ row.candidates|length }} candidate{{ '' if row.candidates|length == 1 else 's' }}</small>
+        {% else %}
+          <span class="status">Waiting for ADS-B</span>
+          <small>No candidate flights imported</small>
+        {% endif %}
+      </div>
+    </div>
+
+    {% if row.candidates %}
+    <div class="candidate-table-wrap">
+      <table class="candidate-table">
+        <thead><tr><th>Candidate</th><th>ADS-B callsign</th><th>Registration score</th><th>Time score</th><th>Airport score</th><th>Callsign score</th><th>Route score</th><th>Total score</th></tr></thead>
+        <tbody>
+          {% for candidate in row.candidates %}
+          <tr data-flight-id="{{ candidate.adsb_flight_id }}"{% if row.truth and row.truth.expected_adsb_flight_id == candidate.adsb_flight_id %} class="candidate-verified"{% endif %}>
+            <td>
+              <a class="table-link" href="{{ url_for('main.flight_detail', adsb_flight_id=candidate.adsb_flight_id) }}">#{{ candidate.adsb_flight_id }}</a>
+              {% if row.truth and row.truth.expected_adsb_flight_id == candidate.adsb_flight_id %}<span class="verified-candidate-mark">Verified</span>{% endif %}
+            </td>
+            <td>{{ candidate.adsb_flight.callsign or '—' }}</td>
+            <td>{{ '%.0f'|format(candidate.registration_score) }}</td>
+            <td>{{ '%.0f'|format(candidate.time_score) }}</td>
+            <td>{{ '%.0f'|format(candidate.airport_score) }}</td>
+            <td>{{ '%.0f'|format(candidate.callsign_score) }}</td>
+            <td>{{ '%.0f'|format(candidate.route_score) }}</td>
+            <td><strong>{{ '%.0f'|format(candidate.total_score) }}</strong></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% endif %}
+
+    <form class="truth-form" method="post" action="{{ url_for('main.save_ground_truth', spotting_id=row.event.spotting_id) }}">
+      <input type="hidden" name="return_date" value="{{ selected_date }}">
+      <input type="hidden" name="return_location" value="{{ selected_location }}">
+      <input type="hidden" name="return_review_status" value="{{ review_status }}">
+      <label>
+        Verified flight
+        <select name="expected_adsb_flight_id">
+          <option value="" {% if not row.truth %}selected{% endif %}>Choose after independent review</option>
+          <option value="none" {% if row.truth and row.truth.expected_adsb_flight_id is none %}selected{% endif %}>Verified: no candidate matches</option>
+          {% for candidate in row.candidates %}
+          <option value="{{ candidate.adsb_flight_id }}" {% if row.truth and row.truth.expected_adsb_flight_id == candidate.adsb_flight_id %}selected{% endif %}>
+            #{{ candidate.adsb_flight_id }} · {{ candidate.adsb_flight.callsign or candidate.adsb_flight.icao24 }}
+          </option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>
+        Verification method
+        <select name="verification_method">
+          <option value="manual_fr24" {% if row.truth and row.truth.verification_method == 'manual_fr24' %}selected{% endif %}>Manual FR24 cross-check</option>
+          <option value="photo_metadata" {% if row.truth and row.truth.verification_method == 'photo_metadata' %}selected{% endif %}>Photo metadata</option>
+          <option value="manual_review" {% if row.truth and row.truth.verification_method == 'manual_review' %}selected{% endif %}>Manual record review</option>
+        </select>
+      </label>
+      <label class="truth-notes">
+        Notes
+        <input name="notes" value="{{ row.truth.notes if row.truth and row.truth.notes else '' }}" placeholder="Independent verification evidence">
+      </label>
+      <button type="submit">{{ 'Update ground truth' if row.truth else 'Save ground truth' }}</button>
+    </form>
+  </article>
+  {% else %}
+  <div class="empty evaluation-empty">No spotting events match this date and location.</div>
+  {% endfor %}
+</div>
+
+<script>
+(() => {
+  const toast = document.getElementById('save-toast');
+  let toastTimer;
+
+  function showToast(message, isError = false) {
+    window.clearTimeout(toastTimer);
+    toast.textContent = message;
+    toast.className = `save-toast${isError ? ' is-error' : ' is-success'}`;
+    toast.hidden = false;
+    requestAnimationFrame(() => toast.classList.add('is-visible'));
+    toastTimer = window.setTimeout(() => {
+      toast.classList.remove('is-visible');
+      window.setTimeout(() => { toast.hidden = true; }, 220);
+    }, 3200);
+  }
+
+  function updateCount(id, delta) {
+    const element = document.getElementById(id);
+    if (!element) return;
+    const current = Number.parseInt(element.textContent, 10);
+    element.textContent = String(Math.max(0, current + delta));
+  }
+
+  function markVerifiedCandidate(card, flightId) {
+    card.querySelectorAll('[data-flight-id]').forEach((row) => {
+      row.classList.remove('candidate-verified');
+      row.querySelector('.verified-candidate-mark')?.remove();
+    });
+    if (flightId === null) return;
+    const selectedRow = card.querySelector(`[data-flight-id="${flightId}"]`);
+    if (!selectedRow) return;
+    selectedRow.classList.add('candidate-verified');
+    const marker = document.createElement('span');
+    marker.className = 'verified-candidate-mark';
+    marker.textContent = 'Verified';
+    selectedRow.cells[0].append(marker);
+  }
+
+  document.querySelectorAll('.truth-form').forEach((form) => {
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const button = form.querySelector('button[type="submit"]');
+      const originalLabel = button.textContent;
+      button.disabled = true;
+      button.textContent = 'Saving…';
+      form.setAttribute('aria-busy', 'true');
+
+      try {
+        const response = await fetch(form.action, {
+          method: 'POST',
+          body: new FormData(form),
+          headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
+        });
+        const result = await response.json();
+        if (!response.ok || !result.ok) throw new Error(result.message || 'The review could not be saved.');
+
+        const card = form.closest('.evaluation-row');
+        const badge = card.querySelector('[data-review-badge]');
+        card.classList.remove('review-state-unevaluated');
+        card.classList.add('review-state-evaluated');
+        card.dataset.reviewState = 'evaluated';
+        badge.className = result.expected_adsb_flight_id === null
+          ? 'status status-verified-none'
+          : 'status status-verified';
+        badge.textContent = result.expected_adsb_flight_id === null
+          ? 'Verified: no match'
+          : 'Verified match';
+        markVerifiedCandidate(card, result.expected_adsb_flight_id);
+
+        if (result.created) {
+          updateCount('count-evaluated', 1);
+          updateCount('count-unevaluated', -1);
+          updateCount('metric-ground-truth', 1);
+        }
+        showToast(result.message);
+        button.textContent = 'Saved';
+
+        if (form.elements.return_review_status.value === 'unevaluated') {
+          card.classList.add('is-leaving');
+          window.setTimeout(() => {
+            card.remove();
+            updateCount('visible-count', -1);
+            if (!document.querySelector('.evaluation-row')) {
+              document.querySelector('.evaluation-list').innerHTML = '<div class="empty evaluation-empty">All records in this sample have been evaluated.</div>';
+            }
+          }, 650);
+        } else {
+          window.setTimeout(() => { button.textContent = 'Update ground truth'; }, 1200);
+        }
+      } catch (error) {
+        showToast(error.message, true);
+        button.textContent = originalLabel;
+      } finally {
+        button.disabled = false;
+        form.removeAttribute('aria-busy');
+      }
+    });
+  });
+})();
+</script>
+{% endblock %}

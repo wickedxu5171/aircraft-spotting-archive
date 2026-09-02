@@ -1,0 +1,174 @@
+{% extends "base.html" %}
+{% block title %}{{ event.aircraft.registration }} · Aircraft Spotting Archive{% endblock %}
+{% block content %}
+<a class="back-link" href="{{ url_for('main.archive') }}">← Back to archive</a>
+
+<section class="sighting-layout sighting-primary">
+  <div class="photo-column">
+    <div class="hero-photo">
+      {% if photos %}
+        <img src="{{ url_for('main.uploaded_photo', filename=photos[0].file_path) }}" alt="{{ event.aircraft.registration }} at {{ event.spotting_location_raw or 'the spotting location' }}">
+      {% else %}
+        <div class="photo-placeholder">
+          <span>PHOTO</span>
+          <strong>No photograph attached yet</strong>
+          <p>Use the + button on an observation record below to add an image.</p>
+        </div>
+      {% endif %}
+    </div>
+    {% if photos|length > 1 %}
+      <div class="photo-strip" aria-label="Additional photographs">
+        {% for photo in photos %}
+          <a href="{{ url_for('main.uploaded_photo', filename=photo.file_path) }}" target="_blank" rel="noopener">
+            <img src="{{ url_for('main.uploaded_photo', filename=photo.file_path) }}" alt="Additional view of {{ event.aircraft.registration }}">
+          </a>
+        {% endfor %}
+      </div>
+    {% endif %}
+  </div>
+
+  <aside class="sighting-sidebar">
+    <div class="sighting-title">
+      <h1>{{ event.aircraft.registration }}</h1>
+    </div>
+
+    <article class="detail-card">
+      <h2>Aircraft information</h2>
+      <dl class="fact-list">
+        <div><dt>Operator</dt><dd>{{ event.observed_airline.name if event.observed_airline else 'N/A' }}</dd></div>
+        <div><dt>Aircraft type</dt><dd>{{ event.aircraft.aircraft_type.model if event.aircraft.aircraft_type else 'N/A' }}</dd></div>
+        <div class="note-fact">
+          <dt><label for="special-note">Special note</label></dt>
+          <dd>
+            <form class="inline-note-form" method="post" action="{{ url_for('main.update_sighting_notes', spotting_id=event.spotting_id) }}">
+              <textarea id="special-note" name="notes" rows="3" maxlength="2000" placeholder="N/A — add a special livery, incident history or other note">{{ event.notes or event.aircraft.notes or '' }}</textarea>
+              <button type="submit">Save note</button>
+            </form>
+          </dd>
+        </div>
+      </dl>
+    </article>
+
+    <article class="detail-card enrichment-card">
+      <div class="card-title-row">
+        <h2>ADS-B enrichment</h2>
+        {% if best_match %}<span class="status status-{{ best_match.match_status }}">{{ best_match.match_status }}</span>{% endif %}
+      </div>
+      {% if best_match %}
+        <dl class="fact-list">
+          <div><dt>Confidence score</dt><dd>{{ '%.0f'|format(best_match.total_score) }} / 100</dd></div>
+          <div><dt>ADS-B callsign</dt><dd>{{ best_match.adsb_flight.callsign or 'Not transmitted' }}</dd></div>
+          <div><dt>Observed interval</dt><dd>{{ best_match.adsb_flight.first_seen.strftime('%H:%M') }}–{{ best_match.adsb_flight.last_seen.strftime('%H:%M') }} UTC</dd></div>
+          <div><dt>Detected route</dt><dd>{{ best_match.adsb_flight.origin_airport.iata_code if best_match.adsb_flight.origin_airport else '?' }} → {{ best_match.adsb_flight.destination_airport.iata_code if best_match.adsb_flight.destination_airport else '?' }}</dd></div>
+        </dl>
+        <a class="detail-action" href="{{ url_for('main.flight_detail', adsb_flight_id=best_match.adsb_flight_id) }}">View trajectory, altitude and speed →</a>
+      {% else %}
+        <p class="muted-copy">No ADS-B candidate has been linked to this observation yet.</p>
+      {% endif %}
+    </article>
+  </aside>
+</section>
+
+<section class="observation-panel">
+  <div class="history-heading">
+    <div>
+      <p class="eyebrow">Aircraft archive</p>
+      <h2>Observation records</h2>
+    </div>
+    <span>{{ observation_history|length }} record{{ '' if observation_history|length == 1 else 's' }} for {{ event.aircraft.registration }}</span>
+  </div>
+
+  <div class="history-list">
+    {% for item in observation_history %}
+      {% set item_photo = photos_by_spotting_id.get(item.spotting_id) %}
+      <article class="observation-card {% if item.spotting_id == event.spotting_id %}is-current{% endif %}">
+        {% if item_photo %}
+          <a class="observation-thumb" href="{{ url_for('main.sighting_detail', spotting_id=item.spotting_id) }}" aria-label="Open the {{ item.spotting_date.isoformat() }} observation">
+            <img src="{{ url_for('main.uploaded_photo', filename=item_photo.file_path) }}" alt="{{ item.aircraft.registration }} observation">
+          </a>
+        {% else %}
+          <button class="observation-thumb observation-upload-trigger"
+                  type="button"
+                  aria-haspopup="dialog"
+                  aria-controls="photo-upload-dialog"
+                  data-upload-action="{{ url_for('main.upload_sighting_photo', spotting_id=item.spotting_id) }}"
+                  data-upload-label="{{ item.aircraft.registration }} · {{ item.spotting_date.strftime('%d %b %Y') }}">
+            <span class="upload-plus" aria-hidden="true">+</span>
+            <span>No photo</span>
+            <small>Add image</small>
+          </button>
+        {% endif %}
+        <a class="observation-card-link" href="{{ url_for('main.sighting_detail', spotting_id=item.spotting_id) }}">
+          <div class="observation-card-body">
+            <time datetime="{{ item.spotting_date.isoformat() }}">{{ item.spotting_date.strftime('%d %b %Y') }}</time>
+            <strong>
+              {% if item_photo and item_photo.captured_at %}
+                {{ item_photo.captured_at.strftime('%H:%M') }}
+              {% elif item.spotting_time %}
+                {{ item.spotting_time.strftime('%H:%M') }}
+              {% else %}
+                Time not recorded
+              {% endif %}
+            </strong>
+            {% if item_photo and item_photo.captured_at and item_photo.captured_at.date() != item.spotting_date %}
+              <span class="photo-date-warning">Capture date needs review</span>
+            {% endif %}
+            <span>{{ item.spotting_location_raw or 'Airport not recorded' }}{% if item.airport and item.airport.iata_code and item.airport.icao_code %} ({{ item.airport.iata_code }}/{{ item.airport.icao_code }}){% endif %}</span>
+          </div>
+        </a>
+        {% if item.spotting_id == event.spotting_id %}<em>Current record</em>{% endif %}
+      </article>
+    {% endfor %}
+  </div>
+</section>
+
+<dialog class="upload-dialog" id="photo-upload-dialog" aria-labelledby="photo-upload-title">
+  <div class="upload-dialog-heading">
+    <div>
+      <p class="eyebrow">Observation image</p>
+      <h2 id="photo-upload-title">Upload photograph</h2>
+      <p id="photo-upload-record"></p>
+    </div>
+    <button class="dialog-close" type="button" aria-label="Close upload window" data-close-dialog>×</button>
+  </div>
+  <form method="post" enctype="multipart/form-data">
+    <label>
+      Image file
+      <input type="file" name="photo" accept="image/jpeg,image/png,image/webp" required>
+    </label>
+    <label>
+      Capture time (optional)
+      <input type="datetime-local" name="captured_at">
+    </label>
+    <p class="form-help">JPEG, PNG or WebP · maximum 25 MB · stored only on this computer</p>
+    <div class="dialog-actions">
+      <button type="button" class="button-secondary" data-close-dialog>Cancel</button>
+      <button type="submit">Upload photo</button>
+    </div>
+  </form>
+</dialog>
+
+<script>
+(() => {
+  const dialog = document.getElementById('photo-upload-dialog');
+  if (!dialog) return;
+
+  const form = dialog.querySelector('form');
+  const recordLabel = document.getElementById('photo-upload-record');
+  document.querySelectorAll('.observation-upload-trigger').forEach((trigger) => {
+    trigger.addEventListener('click', () => {
+      form.action = trigger.dataset.uploadAction;
+      recordLabel.textContent = trigger.dataset.uploadLabel;
+      dialog.showModal();
+    });
+  });
+
+  dialog.querySelectorAll('[data-close-dialog]').forEach((button) => {
+    button.addEventListener('click', () => dialog.close());
+  });
+  dialog.addEventListener('click', (event) => {
+    if (event.target === dialog) dialog.close();
+  });
+})();
+</script>
+{% endblock %}

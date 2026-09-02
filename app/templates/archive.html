@@ -1,0 +1,190 @@
+{% extends "base.html" %}
+{% block title %}Always keep longing for the blue sky · Aircraft Spotting Archive{% endblock %}
+
+{% macro record_table(groups, empty_message) %}
+<div class="table-wrap archive-table-wrap">
+  <table class="archive-table">
+    <thead>
+      <tr>
+        <th>Date</th>
+        <th>Registration</th>
+        <th>Airline</th>
+        <th>Aircraft</th>
+        <th>Flight</th>
+        <th>Route</th>
+        <th>Location</th>
+        <th>Quality</th>
+      </tr>
+    </thead>
+    {% for group in groups %}
+    <tbody class="airline-group">
+      <tr class="airline-group-heading">
+        <th colspan="8">
+          <span>{{ group.airline }}</span>
+          <small>{{ group.rows|length }} record{% if group.rows|length != 1 %}s{% endif %}</small>
+        </th>
+      </tr>
+      {% for row in group.rows %}
+      {% set event = row.event %}
+      <tr>
+        <td>
+          <time datetime="{{ event.spotting_date.isoformat() }}">{{ event.spotting_date.isoformat() }}</time>
+          {% if event.spotting_time %}<small class="record-time">{{ event.spotting_time.strftime('%H:%M') }}</small>{% endif %}
+        </td>
+        <td><a class="table-link" href="{{ url_for('main.sighting_detail', spotting_id=event.spotting_id) }}">{{ event.aircraft.registration }}</a></td>
+        <td>{{ event.observed_airline.name if event.observed_airline else 'Unknown' }}</td>
+        <td>{{ event.aircraft.aircraft_type.model if event.aircraft.aircraft_type else 'Unknown' }}</td>
+        <td>{{ event.flight_number or '—' }}</td>
+        <td>{{ event.route_text_original or '—' }}</td>
+        <td>
+          {% if event.spotting_location_raw %}
+            {{ event.spotting_location_raw }}{% if event.airport and event.airport.iata_code and event.airport.icao_code %} ({{ event.airport.iata_code }}/{{ event.airport.icao_code }}){% endif %}
+          {% else %}—{% endif %}
+        </td>
+        <td>
+          <div class="record-statuses">
+            <span class="status status-{{ event.quality_status }}">{{ event.quality_status }}</span>
+            {% if row.photo %}
+              <span class="record-marker marker-complete" tabindex="0" aria-label="Image uploaded" data-tooltip="Image uploaded">IMG ✓</span>
+            {% else %}
+              <span class="record-marker marker-missing" tabindex="0" aria-label="Image missing" data-tooltip="Image missing">IMG ?</span>
+            {% endif %}
+            {% if row.reviewed %}
+              <span class="record-marker marker-verified" tabindex="0" aria-label="ADS-B manually evaluated" data-tooltip="ADS-B manually evaluated">ADS-B ✓</span>
+            {% else %}
+              <span class="record-marker marker-pending" tabindex="0" aria-label="ADS-B evaluation pending" data-tooltip="ADS-B evaluation pending">ADS-B ?</span>
+            {% endif %}
+          </div>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+    {% else %}
+    <tbody><tr><td colspan="8" class="empty">{{ empty_message }}</td></tr></tbody>
+    {% endfor %}
+  </table>
+</div>
+{% endmacro %}
+
+{% block content %}
+<section class="hero">
+  <h1>Always keep longing for the blue sky</h1>
+  <p class="archive-subtitle">【 Tianyang's Aircraft Spotting Log Website 】</p>
+</section>
+
+<form class="filters" method="get">
+  <label>
+    Registration
+    <input name="registration" value="{{ filters.get('registration', '') }}" placeholder="e.g. G-XLEG">
+  </label>
+  <label>
+    Airline
+    <select name="airline">
+      <option value="">All airlines</option>
+      {% for item in airlines %}
+        <option value="{{ item.name }}" {% if filters.get('airline') == item.name %}selected{% endif %}>{{ item.name }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>
+    Aircraft type
+    <select name="aircraft_type">
+      <option value="">All types</option>
+      <option value="Boeing 787" {% if filters.get('aircraft_type') == 'Boeing 787' %}selected{% endif %}>Boeing 787 family</option>
+      <option value="Airbus A350" {% if filters.get('aircraft_type') == 'Airbus A350' %}selected{% endif %}>Airbus A350 family</option>
+      {% for item in aircraft_types %}
+        <option value="{{ item.model }}" {% if filters.get('aircraft_type') == item.model %}selected{% endif %}>{{ item.model }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>
+    Spotting location
+    <select name="airport">
+      <option value="">All locations</option>
+      {% for item in airports %}
+        <option value="{{ item.value }}" {% if filters.get('airport') == item.value %}selected{% endif %}>{{ item.label }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <button type="submit">Apply filters</button>
+</form>
+
+<section class="archive-navigation" aria-labelledby="archive-navigation-title">
+  <div class="section-intro">
+    <p class="eyebrow">Browse highlights</p>
+    <h2 id="archive-navigation-title">Explore the archive</h2>
+  </div>
+  <div class="category-grid">
+    {% for tile in navigation_tiles %}
+    <a class="category-tile{% if not tile.photos %} category-tile-placeholder{% endif %}"
+       href="{{ tile.href }}"
+       data-images='{{ tile.photos|tojson }}'>
+      <span class="category-tile-bg is-active" aria-hidden="true"></span>
+      <span class="category-tile-bg" aria-hidden="true"></span>
+      <span class="category-tile-shade" aria-hidden="true"></span>
+      <span class="category-tile-copy">
+        <small>{{ tile.eyebrow }}</small>
+        <strong>{{ tile.label }}</strong>
+        <em>{% if tile.photos %}{{ tile.photos|length }} image{% if tile.photos|length != 1 %}s{% endif %}{% else %}Images coming soon{% endif %}</em>
+      </span>
+    </a>
+    {% endfor %}
+  </div>
+</section>
+
+<section class="results-heading archive-summary">
+  <div>
+    <p class="eyebrow">Archive results</p>
+    <h2>{{ event_count }} sightings shown</h2>
+  </div>
+  <p><strong>{{ missing_image_count }}</strong> awaiting images · <strong>{{ uploaded_image_count }}</strong> with images</p>
+</section>
+
+<section class="archive-result-section" aria-labelledby="missing-images-title">
+  <div class="record-section-heading">
+    <div>
+      <p class="eyebrow">Upload queue</p>
+      <h2 id="missing-images-title">Missing images</h2>
+    </div>
+    <span>{{ missing_image_count }}</span>
+  </div>
+  {{ record_table(missing_image_groups, 'Every matching sighting already has an image.') }}
+</section>
+
+<section class="archive-result-section" aria-labelledby="uploaded-images-title">
+  <div class="record-section-heading">
+    <div>
+      <p class="eyebrow">Photo archive</p>
+      <h2 id="uploaded-images-title">Images uploaded</h2>
+    </div>
+    <span>{{ uploaded_image_count }}</span>
+  </div>
+  {{ record_table(uploaded_image_groups, 'No matching sighting has an uploaded image yet.') }}
+</section>
+
+<script>
+(() => {
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  document.querySelectorAll('.category-tile').forEach((tile, tileIndex) => {
+    let images = [];
+    try { images = JSON.parse(tile.dataset.images || '[]'); } catch (error) { images = []; }
+    if (!images.length) return;
+
+    const layers = Array.from(tile.querySelectorAll('.category-tile-bg'));
+    let activeLayer = 0;
+    let imageIndex = 0;
+    layers[0].style.backgroundImage = `url("${images[0]}")`;
+    if (images.length < 2 || reduceMotion) return;
+
+    window.setInterval(() => {
+      imageIndex = (imageIndex + 1) % images.length;
+      const nextLayer = activeLayer === 0 ? 1 : 0;
+      layers[nextLayer].style.backgroundImage = `url("${images[imageIndex]}")`;
+      layers[nextLayer].classList.add('is-active');
+      layers[activeLayer].classList.remove('is-active');
+      activeLayer = nextLayer;
+    }, 5200 + tileIndex * 350);
+  });
+})();
+</script>
+{% endblock %}

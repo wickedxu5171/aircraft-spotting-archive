@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}{{ flight.callsign or flight.icao24 }} · ADS-B Flight{% endblock %}
+{% block content %}
+<section class="hero flight-hero">
+  <p class="eyebrow">{{ flight.source_name }} · enriched flight record</p>
+  <h1>{{ flight.callsign or 'Unknown callsign' }}</h1>
+  <p>{{ flight.registration or flight.icao24|upper }} · {{ flight.origin_airport.iata_code if flight.origin_airport else 'Unknown origin' }} → {{ flight.destination_airport.iata_code if flight.destination_airport else 'Unknown destination' }}</p>
+</section>
+
+<section class="flight-facts">
+  <article><span>First seen (UTC)</span><strong>{{ flight.first_seen.strftime('%Y-%m-%d %H:%M') }}</strong></article>
+  <article><span>Last seen (UTC)</span><strong>{{ flight.last_seen.strftime('%Y-%m-%d %H:%M') }}</strong></article>
+  <article><span>Track points</span><strong>{{ points|length }}</strong></article>
+  <article><span>Maximum altitude</span><strong>{{ '%.0f ft'|format(visualization.max_altitude_ft) if visualization.max_altitude_ft is not none else '—' }}</strong></article>
+  <article><span>Maximum speed</span><strong>{{ '%.0f kt'|format(visualization.max_speed_knots) if visualization.max_speed_knots is not none else '—' }}</strong></article>
+</section>
+
+{% if visualization.records %}
+<section class="chart-panel trajectory-panel">
+  <div class="chart-heading">
+    <div><p class="eyebrow">Geographic extent</p><h2>Trajectory</h2></div>
+    <span>{{ '%.2f'|format(visualization.min_latitude) }}°–{{ '%.2f'|format(visualization.max_latitude) }}° N · {{ '%.2f'|format(visualization.min_longitude) }}°–{{ '%.2f'|format(visualization.max_longitude) }}° E</span>
+  </div>
+  <svg class="track-svg" viewBox="0 0 {{ visualization.width }} {{ visualization.map_height }}" role="img" aria-label="Aircraft trajectory plot">
+    <defs>
+      <linearGradient id="track-gradient" x1="0" x2="1"><stop offset="0" stop-color="#78b6cf"/><stop offset="1" stop-color="#f1b24a"/></linearGradient>
+    </defs>
+    <path class="chart-grid" d="M28 105 H932 M28 210 H932 M28 315 H932 M240 28 V392 M480 28 V392 M720 28 V392"/>
+    <polyline class="trajectory-line" points="{{ visualization.trajectory_path }}"/>
+    {% set first = visualization.trajectory_path.split(' ')[0] %}
+    {% set last = visualization.trajectory_path.split(' ')[-1] %}
+    <circle class="track-start" cx="{{ first.split(',')[0] }}" cy="{{ first.split(',')[1] }}" r="7"/>
+    <circle class="track-end" cx="{{ last.split(',')[0] }}" cy="{{ last.split(',')[1] }}" r="7"/>
+  </svg>
+  <div class="track-legend"><span><i class="legend-dot start"></i>First observation</span><span><i class="legend-dot end"></i>Last observation</span></div>
+</section>
+
+<div class="profile-grid">
+  <section class="chart-panel">
+    <div class="chart-heading"><div><p class="eyebrow">Flight profile</p><h2>Altitude</h2></div><span>Feet</span></div>
+    <svg class="profile-svg" viewBox="0 0 960 220" role="img" aria-label="Altitude profile"><path class="chart-grid" d="M24 55 H936 M24 110 H936 M24 165 H936"/><polyline class="profile-line altitude-line" points="{{ visualization.altitude_path }}"/></svg>
+  </section>
+  <section class="chart-panel">
+    <div class="chart-heading"><div><p class="eyebrow">Flight profile</p><h2>Ground speed</h2></div><span>Knots</span></div>
+    <svg class="profile-svg" viewBox="0 0 960 220" role="img" aria-label="Ground speed profile"><path class="chart-grid" d="M24 55 H936 M24 110 H936 M24 165 H936"/><polyline class="profile-line speed-line" points="{{ visualization.speed_path }}"/></svg>
+  </section>
+</div>
+{% else %}
+<div class="empty evaluation-empty">No track points are available for this flight.</div>
+{% endif %}
+{% endblock %}
