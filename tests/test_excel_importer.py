@@ -1,6 +1,7 @@
 from datetime import date
 from pathlib import Path
 
+import pytest
 from openpyxl import Workbook
 
 from app.services.excel_importer import (
@@ -118,6 +119,10 @@ def test_compact_corrected_workbook_layout_is_detected(tmp_path):
     assert all(item.quality_status == "ready" for item in events)
 
 
+@pytest.mark.skipif(
+    not SOURCE_WORKBOOK.is_file(),
+    reason="Private source workbook is intentionally excluded from the public artefact",
+)
 def test_workbook_unpivots_to_expected_event_count():
     events = list(
         iter_spotting_events(SOURCE_WORKBOOK, current_date=date(2026, 8, 24))
@@ -126,6 +131,10 @@ def test_workbook_unpivots_to_expected_event_count():
     assert sum(event.quality_status == "review" for event in events) >= 13
 
 
+@pytest.mark.skipif(
+    not SOURCE_WORKBOOK.is_file(),
+    reason="Private source workbook is intentionally excluded from the public artefact",
+)
 def test_ba_a380_case_study_rows():
     events = list(
         iter_spotting_events(SOURCE_WORKBOOK, current_date=date(2026, 8, 24))
@@ -137,3 +146,4 @@ def test_ba_a380_case_study_rows():
     ]
     assert {event.flight_number for event in case_study} == {"BA285", "BA217", "BA107"}
     assert all(event.spotting_date == date(2025, 11, 5) for event in case_study)
+
